@@ -1,15 +1,14 @@
 import { client } from '@ont-dev/ontology-dapi'
 import React, { useState, useEffect, useCallback } from 'react'
 import { useHistory, useLocation } from "react-router-dom"
-import { useMappedState, useDispatch } from 'redux-react-hook';
+import { useMappedState, useDispatch } from 'redux-react-hook'
 import { utils } from 'ontology-ts-sdk'
 import { useAlert } from 'react-alert'
 import BigNumber from 'bignumber.js'
 import Slider from 'rc-slider'
 import { useFetchPairs } from '../../../hooks/usePair';
-import { SWAP_ADDRESS, TRANSACTION_BASE_URL, TRANSACTION_AFTERFIX } from '../../../config'
-import { SLIPPAGE } from '../../../utils/constants'
-import 'rc-slider/assets/index.css';
+import { TRANSACTION_BASE_URL, TRANSACTION_AFTERFIX } from '../../../config'
+import 'rc-slider/assets/index.css'
 import './index.css'
 
 const { StringReader } = utils
@@ -23,10 +22,12 @@ const RemoveLiquidity = () => {
   const [pair, setPair] = useState({})
   const [amount, setAmount] = useState(0)
   const [showPrice, setShowPrice] = useState(false)
-  const { account, tokens, pairs } = useMappedState((state) => ({
+  const { account, slippage, tokens, pairs, SWAP_ADDRESS } = useMappedState((state) => ({
     account: state.wallet.account,
+    slippage: state.wallet.slippage,
     tokens: state.common.tokens,
-    pairs: state.swap.pairs
+    pairs: state.swap.pairs,
+    SWAP_ADDRESS: state.gov.poolStat.pools.swap.address
   }))
   const dispatch = useDispatch()
   const setModal = useCallback((modalType, modalDetail) => dispatch({ type: 'SET_MODAL', modalType, modalDetail }), [])
@@ -43,7 +44,7 @@ const RemoveLiquidity = () => {
         setLiquidityBalance(resp)
       })
     }
-  }, [account, pairs])
+  }, [account, pairs, SWAP_ADDRESS])
 
   useEffect(() => {
     if (tokens.length && pairs.length && pairId) {
@@ -68,25 +69,27 @@ const RemoveLiquidity = () => {
   }, [amount, pair, token1, token2])
 
   function getLiquidityBalanceByPairId(id) {
-    return client.api.smartContract.invokeWasmRead({
-      scriptHash: SWAP_ADDRESS,
-      operation: 'balanceOf',
-      args: [
-        {
-          type: 'Long',
-          value: id
-        },
-        {
-          type: 'Address',
-          value: account
-        }
-      ]
-    }).then((resp) => {
-      const strReader = new StringReader(resp)
-      const balance = strReader.readUint128()
-      
-      return balance
-    })
+    if (SWAP_ADDRESS) {
+      return client.api.smartContract.invokeWasmRead({
+        scriptHash: SWAP_ADDRESS,
+        operation: 'balanceOf',
+        args: [
+          {
+            type: 'Long',
+            value: id
+          },
+          {
+            type: 'Address',
+            value: account
+          }
+        ]
+      }).then((resp) => {
+        const strReader = new StringReader(resp)
+        const balance = strReader.readUint128()
+        
+        return balance
+      })
+    }
   }
 
   function getPairPrice() {
@@ -103,63 +106,66 @@ const RemoveLiquidity = () => {
       return
     }
 
-    try {
-      const args = [
-        {
-          type: 'Address',
-          value: account
-        },
-        {
-          type: 'Long',
-          value: token1.id
-        },
-        {
-          type: 'Long',
-          value: token2.id
-        },
-        {
-          type: 'Long',
-          value: new BigNumber(liquidityBalance).times(amount / 100).integerValue(BigNumber.ROUND_UP).toString()
-        },
-        {
-          type: 'Long',
-          value: new BigNumber(token1Amount).times(10 ** token1.decimals).times(1 - SLIPPAGE).integerValue(BigNumber.ROUND_UP).toString()
-        },
-        {
-          type: 'Long',
-          value: new BigNumber(token2Amount).times(10 ** token2.decimals).times(1 - SLIPPAGE).integerValue(BigNumber.ROUND_UP).toString()
-        },
-        {
-          type: 'Address',
-          value: account
-        }
-      ]
-      const addResult = await client.api.smartContract.invokeWasm({
-        scriptHash: SWAP_ADDRESS,
-        operation: 'remove_liquidity',
-        args,
-        gasPrice: 2500,
-        gasLimit: 30000000,
-        requireIdentity: false
-      })
+    if (SWAP_ADDRESS) {
+      try {
+        const args = [
+          {
+            type: 'Address',
+            value: account
+          },
+          {
+            type: 'Long',
+            value: token1.id
+          },
+          {
+            type: 'Long',
+            value: token2.id
+          },
+          {
+            type: 'Long',
+            value: new BigNumber(liquidityBalance).times(amount / 100).integerValue(BigNumber.ROUND_UP).toString()
+          },
+          {
+            type: 'Long',
+            value: new BigNumber(token1Amount).times(10 ** token1.decimals).times(1 - slippage / 100).integerValue(BigNumber.ROUND_UP).toString()
+          },
+          {
+            type: 'Long',
+            value: new BigNumber(token2Amount).times(10 ** token2.decimals).times(1 - slippage / 100).integerValue(BigNumber.ROUND_UP).toString()
+          },
+          {
+            type: 'Address',
+            value: account
+          }
+        ]
+        const addResult = await client.api.smartContract.invokeWasm({
+          scriptHash: SWAP_ADDRESS,
+          operation: 'remove_liquidity',
+          args,
+          gasPrice: 2500,
+          gasLimit: 60000000,
+          requireIdentity: false
+        })
 
-      if (addResult.transaction) {
+        if (addResult.transaction) {
+          setModal('infoModal', {
+            show: true,
+            type: 'success',
+            text: 'Transaction Successful',
+            extraText: 'View Transaction',
+            extraLink: `${TRANSACTION_BASE_URL}${addResult.transaction}${TRANSACTION_AFTERFIX}`
+          })
+        }
+      } catch (e) {
         setModal('infoModal', {
           show: true,
-          type: 'success',
-          text: 'Transaction Successful',
-          extraText: 'View Transaction',
-          extraLink: `${TRANSACTION_BASE_URL}${addResult.transaction}${TRANSACTION_AFTERFIX}`
+          type: 'error',
+          text: 'Transaction Failed',
+          // extraText: `${e}`,
+          extraText: '',
+          extraLink: ''
         })
       }
-    } catch (e) {
-      setModal('infoModal', {
-        show: true,
-        type: 'error',
-        text: 'Transaction Failed',
-        extraText: `${e}`,
-        extraLink: ''
-      })
     }
   }
 
@@ -179,7 +185,7 @@ const RemoveLiquidity = () => {
             <div className="quick-item" onClick={() => setAmount(100)}>Max</div>
           </div>
         </div>
-        <div className="icon-arrow-down"></div>
+        <div className="icon-arrow-down" />
         <div className="rl-receive-wrapper">
           <div className={`receive-token-item icon-${token1.name}`}>
             {token1.name}

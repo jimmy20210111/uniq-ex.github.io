@@ -1,22 +1,25 @@
-.lp-token-wrapper {
+.token-icon-wrapper {
   display: inline-block;
   position: relative;
   z-index: 1;
 }
 
-.lp-token {
+.token-icon-item {
   position: relative;
   display: inline-block;
   width: 36px;
   height: 36px;
   vertical-align: top;
-  filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.2));
-  background-position: center;
+  background-position: left center;
   background-size: 36px auto;
   background-repeat: no-repeat;
 }
 
-.lp-token + .lp-token {
+.token-icon-item.with-drop-shadow {
+  filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.token-icon-item + .token-icon-item {
   z-index: -1;
   margin-left: -8px;
 }

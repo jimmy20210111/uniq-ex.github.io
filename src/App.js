@@ -18,6 +18,7 @@ import RemoveLiquidity from './pages/pool/removeLiquidity'
 import Staking from './pages/staking'
 import StakingDetail from './pages/staking/detail'
 import Token from './pages/token'
+import Synth from './pages/synth'
 import Overview from './pages/governance'
 import { NETWORK_TYPE, READY_TABS } from './config'
 import { useFetchTokens } from './hooks/useToken'
@@ -130,15 +131,21 @@ export const App = () => {
               </Route> : null
             }
             {
+              READY_TABS.indexOf('/governance') >= 0 ?
+              <Route exact path="/governance">
+                <Overview />
+              </Route> : null
+            }
+            {
               READY_TABS.indexOf('/token') >= 0 ?
               <Route exact path="/token">
                 <Token />
               </Route> : null
             }
             {
-              READY_TABS.indexOf('/governance') >= 0 ?
-              <Route exact path="/governance">
-                <Overview />
+              READY_TABS.indexOf('/synth') >= 0 ?
+              <Route exact path="/synth">
+                <Synth />
               </Route> : null
             }
           </Switch>

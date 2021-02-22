@@ -19,7 +19,11 @@
   padding-left: 48px;
 }
 
-.inline-lp-token .lp-token {
+.inline-token-wrapper {
+  margin: 0 8px 0 20px;
+}
+
+.inline-token-wrapper .token-icon-item {
   width: 24px;
   background-size: 24px auto;
 }
@@ -48,19 +52,36 @@
   background-repeat: no-repeat;
 }
 
-.inline-lp-token, .stake-lp-token-wrapper {
-  position: absolute !important;
-  left: 0;
+.stake-token-amount {
+  display: flex;
+  padding-left: 0;
 }
 
-.stake-lp-token-wrapper .lp-token {
+.stake-token-amount, .harvest-token-amount {
+  line-height: 40px;
+}
+
+.stake-token-wrapper {
+  width: 120px;
+}
+
+.stake-token-wrapper .token-icon-item {
   width: 48px;
   height: 80px;
   background-size: 48px auto;
 }
 
-.stake-lp-token-wrapper .lp-token + .lp-token {
+.stake-token-wrapper .token-icon-item + .token-icon-item {
   margin-left: -12px;
+}
+
+.stake-token-amount-detail {
+  flex: 1;
+}
+
+.stake-token-amount-label, .harvest-token-amount-label {
+  font-size: 18px;
+  color: #949494;
 }
 
 .stake-token-actions, .harvest-token-actions {
@@ -105,4 +126,18 @@
 
 .claimable-wing-label {
   float: right;
+}
+
+.claimable-wing-label span {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  margin-left: 10px;
+  border-radius: 20px;
+  line-height: 24px;
+  font-size: 14px;
+  vertical-align: 4px;
+  text-align: center;
+  color: #fff;
+  background: #222;
 }

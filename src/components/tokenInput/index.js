@@ -7,7 +7,7 @@ import { getTokenBalance } from '../../utils/token'
 import './index.css'
 
 const TokenInput = (props) => {
-  const { value, round, tokens, defaultTokenId, inputDisabled = false, showBalance = true, withMax = true, onTokenChange, onAmountChange } = props
+  const { value, round, tokens, defaultTokenId, inputDisabled = false, showBalance = true, withMax = true, onTokenChange, onAmountChange, balanceChange = 0 } = props
   const [token, setToken] = useState({})
   const [balance, setBalance] = useState('-')
   const { account } = useMappedState((state) => ({
@@ -18,11 +18,11 @@ const TokenInput = (props) => {
     if (account && showBalance && token.id) {
       getTokenBalance(account, token, setBalance)
     }
-  }, [token, showBalance, account])
+  }, [tokens, token, showBalance, account, balanceChange])
 
   const handleTokenChange = (e) => {
     if (e.value !== token.id) {
-      const newToken = tokens.filter((t) => t.id === e.value)[0]
+      const newToken = tokens.find((t) => t.id === e.value)
 
       setToken(newToken)
       typeof onTokenChange === 'function' && onTokenChange(newToken)
@@ -49,7 +49,7 @@ const TokenInput = (props) => {
       )
       let defaultToken = defaultId ? (tokens.find((t) => t.id === defaultId) || tokens[0]) : tokens[0]
 
-      if (!token.id) {
+      if (!token.id || !tokens.find((t) => t.id === token.id)) {
         setToken(defaultToken)
       }
 

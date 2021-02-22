@@ -5,8 +5,20 @@
 }
 
 .stake-pool .title {
-  height: 200px;
-  background: url('../../assets/stake.jpg') center center / auto 100% no-repeat;
+  padding-top: 200px;
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+  background: url('../../assets/stake.jpg') center center / auto 200px no-repeat;
+}
+
+.unstake-pool-title {
+  position: relative;
+  width: 1000px;
+  margin: 0 auto;
+  font-size: 32px;
+  font-weight: bold;
+  text-align: center;
 }
 
 .pool-list {
@@ -24,6 +36,10 @@
   background-position: center 20px;
   background-size: 48px auto;
   background-repeat: no-repeat;
+}
+
+.pool-list-item-disabled .item-detail-wrapper > div:not(:last-child) {
+  filter: grayscale(1);
 }
 
 .item-detail {
@@ -101,4 +117,18 @@
   color: #fff;
   border-radius: 40px;
   background: RGBA(43, 190, 127, 1.00);
+}
+
+.closed-pool-entrance {
+  margin: 0 32px;
+  padding: 28px 0;
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+  border-radius: 20px;
+  overflow: hidden;
+  cursor: pointer;
+  box-sizing: border-box;
+  box-shadow: 0 0 20px rgba(0, 0, 0, .07);
+  background: #fff;
 }

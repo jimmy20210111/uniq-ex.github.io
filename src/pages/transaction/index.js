@@ -4,33 +4,38 @@ import { utils } from 'ontology-ts-sdk'
 import BigNumber from 'bignumber.js'
 import { useAlert } from 'react-alert'
 import { useMappedState, useDispatch } from 'redux-react-hook';
-import TokenInput from '../../components/tokenInput'
+import { getTokenBalance } from '../../utils/token'
 import Input from '../../components/input'
 import { handleError } from '../../utils/errorHandle'
 import { getHashString } from '../../utils/common'
 import { PRICE_DECIMALS } from '../../utils/constants'
-import { CONTRACT_ADDRESS, TRANSACTION_BASE_URL, TRANSACTION_AFTERFIX } from '../../config'
+import { TRANSACTION_BASE_URL, TRANSACTION_AFTERFIX } from '../../config'
 import './index.css'
 
 const { StringReader } = utils
 
 const Transaction = () => {
-  const [assetToken, setAssetToken] = useState({})
-  const [priceToken, setPriceToken] = useState({})
+  const [pairNameKeyword, setPairNameKeyword] = useState('')
+  const [pairs, setPairs] = useState([])
+  const [tokenPair, setTokenPair] = useState({})
+  const [showPairSelectModal, setShowPairSelectModal] = useState(false)
+  const [tradeType, setTradeType] = useState('buy')
+  const [tokenBalance, setTokenBalance] = useState('-')
   const [makes, setMakes] = useState([])
   const [myMakes, setMyMakes] = useState([])
   const [makeView, setMakeView] = useState('all')
   const [price, setPrice] = useState('')
   const [amount, setAmount] = useState('')
-  const [total, setTotal] = useState(0)
+  const [total, setTotal] = useState('')
   const [pool, setPool] = useState([])
   const [lastPrice, setLastPrice] = useState(0)
   const [feeRate, setFeeRate] = useState(0)
   const [isValid, setIsValid] = useState(false)
-  const { account, stopInterval, tokens } = useMappedState((state) => ({
+  const { account, stopInterval, tokens, CONTRACT_ADDRESS } = useMappedState((state) => ({
     account: state.wallet.account,
     stopInterval: state.common.stopInterval,
-    tokens: state.common.tokens
+    tokens: state.common.tokens,
+    CONTRACT_ADDRESS: state.gov.poolStat.pools.dex.address
   }))
   const dispatch = useDispatch()
   const setModal = useCallback((modalType, modalDetail) => dispatch({ type: 'SET_MODAL', modalType, modalDetail }), [])
@@ -38,26 +43,26 @@ const Transaction = () => {
 
   const Alert = useAlert()
 
-  const urlAssetTokenName = getHashString(window.location.hash, 'asset')
-  const urlPriceTokenName = getHashString(window.location.hash, 'price')
+  const urlPairName = decodeURIComponent(getHashString(window.location.hash, 'pair') || '')
 
   useEffect(() => {
-    if (pool.length && !assetToken.id && !priceToken.id) {
-      let tempToken = pool.find((t) => urlAssetTokenName === t.name)
-      setAssetToken(tempToken || pool[0])
-      tempToken = pool.find((t) => urlPriceTokenName === t.name)
-      setPriceToken(tempToken || pool[1])
+    if (pairs.length && !tokenPair.name) {
+      setTokenPair(pairs.find((p) => p.name === `${urlPairName}`) || pairs[0])
     }
-  }, [pool])
+  }, [pairs])
+
+  useEffect(() => {
+    if (account && tokenPair.name) {
+      setTokenBalance('-')
+      getTokenBalance(account, tradeType === 'buy' ? tokenPair.tokens[1] : tokenPair.tokens[0], (bl) => {
+        setTokenBalance(bl)
+      })
+    }
+  }, [account, tokenPair, tradeType])
 
   useEffect(() => {
     function getMakesOfPair() {
-      if (assetToken.id) {
-        if (assetToken.id === priceToken.id) {
-          setMakes([])
-          setLastPrice(0)
-          return
-        }
+      if (tokenPair.name && CONTRACT_ADDRESS) {
         try {
           client.api.smartContract.invokeWasmRead({
             scriptHash: CONTRACT_ADDRESS,
@@ -65,11 +70,11 @@ const Transaction = () => {
             args: [
               {
                 type: 'Long',
-                value: assetToken.id
+                value: tokenPair.tokens[0].id
               },
               {
                 type: 'Long',
-                value: priceToken.id
+                value: tokenPair.tokens[1].id
               }
             ]
           })
@@ -77,8 +82,6 @@ const Transaction = () => {
             const parsedMakes = []
             const strReader = new StringReader(makeStr)
             const pairLastPrice = strReader.readUint128()
-            const tempAssetTokenId = assetToken.id < priceToken.id ? assetToken.id : priceToken.id
-            const tempPriceTokenId = assetToken.id < priceToken.id ? priceToken.id : assetToken.id
     
             for (let j = 0; j <= 1; j++) {
               const makeCount = strReader.readNextLen()
@@ -87,14 +90,14 @@ const Transaction = () => {
                 make.make_id = strReader.readUint128()
                 make.price = strReader.readUint128()
                 make.amount = new BigNumber(strReader.readUint128()).toString()
-                make.asset_token_id = (j === 0 ? tempAssetTokenId : tempPriceTokenId)
-                make.price_token_id = (j === 0 ? tempPriceTokenId : tempAssetTokenId)
+                make.asset_token_id = (j === 0 ? tokenPair.tokens[0].id : tokenPair.tokens[1].id)
+                make.price_token_id = (j === 0 ? tokenPair.tokens[1].id : tokenPair.tokens[0].id)
         
                 parsedMakes.push(make)
               }
             }
     
-            setLastPrice(pairLastPrice ? (assetToken.id < priceToken.id ? pairLastPrice / PRICE_DECIMALS : PRICE_DECIMALS / pairLastPrice) : 0)
+            setLastPrice(pairLastPrice ? pairLastPrice / PRICE_DECIMALS : 0)
             setMakes(parsedMakes)
           })
           .catch((e) => {
@@ -116,11 +119,11 @@ const Transaction = () => {
     return () => {
       interval && clearInterval(interval)
     }
-  }, [assetToken, priceToken, account, stopInterval])
+  }, [tokenPair, account, stopInterval, CONTRACT_ADDRESS])
 
   useEffect(() => {
     function getUserMakes() {
-      if (account) {
+      if (account && CONTRACT_ADDRESS) {
         try {
           client.api.smartContract.invokeWasmRead({
             scriptHash: CONTRACT_ADDRESS,
@@ -170,11 +173,11 @@ const Transaction = () => {
     return () => {
       interval && clearInterval(interval)
     }
-  }, [assetToken, priceToken, account, stopInterval])
+  }, [tokenPair, account, stopInterval, CONTRACT_ADDRESS])
 
   useEffect(() => {
     async function getStat() {
-      if (tokens.length) {
+      if (tokens.length && CONTRACT_ADDRESS) {
         try {
           const statStr = await client.api.smartContract.invokeWasmRead({
             scriptHash: CONTRACT_ADDRESS,
@@ -194,6 +197,20 @@ const Transaction = () => {
             token.balance = new BigNumber(strReader.readUint128()).div(new BigNumber(10 ** tempToken.decimals)).toString()
   
             tokenPool.push(Object.assign(tempToken, token))
+          }
+
+          if (!pairs.length) {
+            const tokenPairs = []
+            for (let i = 0; i < tokenPool.length; i++) {
+              for (let j = i + 1; j < tokenPool.length; j++) {
+                tokenPairs.push({
+                  name: `${tokenPool[i].name}/${tokenPool[j].name}`,
+                  tokens: [tokenPool[i], tokenPool[j]]
+                })
+              }
+            }
+
+            setPairs(tokenPairs)
           }
 
           setPool(tokenPool)
@@ -218,19 +235,27 @@ const Transaction = () => {
       }
     }, 5000)
     return () => clearInterval(interval)
-  }, [tokens, stopInterval])
+  }, [tokens, pairs, stopInterval, CONTRACT_ADDRESS])
 
   useEffect(() => {
-    setTotal((price || 0) * (amount || 0))
+    if (price > 0 && amount > 0) {
+      setTotal(price * amount)
+    }
   }, [price, amount])
 
   useEffect(() => {
-    if (assetToken.id !== priceToken.id && price > 0 && amount > 0) {
+    if (price > 0) {
+      setAmount((total || 0) / price)
+    }
+  }, [total])
+
+  useEffect(() => {
+    if (tokenPair.name && price > 0 && amount > 0) {
       setIsValid(true)
     } else {
       setIsValid(false)
     }
-  }, [assetToken, priceToken, amount, price])
+  }, [tokenPair, amount, price])
 
   useEffect(() => {
     setMakeView('all')
@@ -245,25 +270,23 @@ const Transaction = () => {
   }
 
   function getMakes(type) {
-    if (assetToken.id) {
+    if (tokenPair.name) {
       const curMakes = (makeView === 'my' ? myMakes : makes)
       if (type === 'sell') {
-        return curMakes.filter((m) => m.asset_token_id === assetToken.id && m.price_token_id === priceToken.id).map((m) => {
+        return curMakes.filter((m) => m.asset_token_id === tokenPair.tokens[0].id && m.price_token_id === tokenPair.tokens[1].id).map((m) => {
           return (
             <div key={m.make_id} className="my-make-item reverse">
               <div className="make-item-detail make-sell">{m.price / PRICE_DECIMALS}</div>
-              <div className="make-item-detail">{new BigNumber(m.amount).div(Math.pow(10, assetToken.decimals)).toString()}</div>
-              {/* <div className="make-item-detail">{new BigNumber(m.amount).times(m.price).div(Math.pow(10, assetToken.decimals)).div(PRICE_DECIMALS).toString()}</div> */}
+              <div className="make-item-detail">{new BigNumber(m.amount).div(Math.pow(10, tokenPair.tokens[0].decimals)).toString()}</div>
               { makeView === 'my' && <div className="unmake-btn" onClick={() => onUnmake(m.make_id)}>Cancel</div> }
             </div>)
         })
       } else {
-        return curMakes.filter((m) => m.asset_token_id === priceToken.id && m.price_token_id === assetToken.id).map((m) => {
+        return curMakes.filter((m) => m.asset_token_id === tokenPair.tokens[1].id && m.price_token_id === tokenPair.tokens[0].id).map((m) => {
           return (
             <div key={m.make_id} className="my-make-item">
               <div className="make-item-detail make-buy">{PRICE_DECIMALS / m.price}</div>
-              <div className="make-item-detail">{new BigNumber(m.amount).times(m.price).div(PRICE_DECIMALS).div(Math.pow(10, priceToken.decimals)).toString()}</div>
-              {/* <div className="make-item-detail">{new BigNumber(m.amount).div(Math.pow(10, priceToken.decimals)).toString()}</div> */}
+              <div className="make-item-detail">{new BigNumber(m.amount).times(m.price).div(PRICE_DECIMALS).div(Math.pow(10, tokenPair.tokens[1].decimals)).toString()}</div>
               { makeView === 'my' && <div className="unmake-btn" onClick={() => onUnmake(m.make_id)}>Cancel</div> }
             </div>)
         })
@@ -279,11 +302,7 @@ const Transaction = () => {
       Alert.show('Please Connect Wallet First')
       return
     }
-    if (assetToken.id) {
-      if (assetToken.id === priceToken.id) {
-        Alert.error('Please select different token')
-        return
-      }
+    if (tokenPair.name && CONTRACT_ADDRESS) {
       if (price <= 0) {
         Alert.error('Price should be greater than 0')
         return
@@ -293,6 +312,10 @@ const Transaction = () => {
         return
       }
       try {
+        const assetToken = tradeType === 'buy' ? tokenPair.tokens[1] : tokenPair.tokens[0]
+        const priceToken = tradeType === 'buy' ? tokenPair.tokens[0] : tokenPair.tokens[1]
+        const tradePrice = tradeType === 'buy' ? 1 / price : price
+        const tradeAmount = tradeType === 'buy' ? total : amount
         const args = [
           {
             type: 'Address',
@@ -308,11 +331,11 @@ const Transaction = () => {
           },
           {
             type: 'Long',
-            value: new BigNumber(price).times(PRICE_DECIMALS).integerValue(BigNumber.ROUND_DOWN).toString()
+            value: new BigNumber(tradePrice).times(PRICE_DECIMALS).integerValue(BigNumber.ROUND_DOWN).toString()
           },
           {
             type: 'Long',
-            value: new BigNumber(amount).times(new BigNumber(10 ** assetToken.decimals)).integerValue(BigNumber.ROUND_DOWN).toString()
+            value: new BigNumber(tradeAmount).times(new BigNumber(10 ** assetToken.decimals)).integerValue(BigNumber.ROUND_DOWN).toString()
           }
         ]
         const makeResult = await client.api.smartContract.invokeWasm({
@@ -320,13 +343,14 @@ const Transaction = () => {
           operation: 'make',
           args,
           gasPrice: 2500,
-          gasLimit: 30000000,
+          gasLimit: 60000000,
           requireIdentity: false
         })
 
         if (makeResult.transaction) {
           setAmount('')
           setPrice('')
+          setTotal('')
           setModal('infoModal', {
             show: true,
             type: 'success',
@@ -340,7 +364,8 @@ const Transaction = () => {
           show: true,
           type: 'error',
           text: 'Transaction Failed',
-          extraText: `${e}`,
+          // extraText: `${e}`,
+          extraText: '',
           extraLink: ''
         })
       }
@@ -348,7 +373,7 @@ const Transaction = () => {
   }
 
   async function onUnmake(makeId) {
-    if (account && makeId) {
+    if (account && makeId && CONTRACT_ADDRESS) {
       try {
         const unmakeResult = await client.api.smartContract.invokeWasm({
           scriptHash: CONTRACT_ADDRESS,
@@ -364,7 +389,7 @@ const Transaction = () => {
             }
           ],
           gasPrice: 2500,
-          gasLimit: 30000000,
+          gasLimit: 60000000,
           requireIdentity: false
         })
         if (unmakeResult.transaction) {
@@ -381,44 +406,23 @@ const Transaction = () => {
           show: true,
           type: 'error',
           text: 'Transaction Failed',
-          extraText: `${e}`,
+          // extraText: `${e}`,
+          extraText: '',
           extraLink: ''
         })
       }
     }
   }
 
-  function generatePriceHint() {
-    if (assetToken.id) {
-      return `1 ${assetToken.name} = ${price || '?'} ${priceToken.name}`
+  function getPriceHint() {
+    if (tokenPair.name) {
+      return tokenPair.tokens[1].name
     }
   }
 
   function getAmountHint() {
-    if (assetToken.id) {
-      return assetToken.name
-    }
-  }
-
-  function getPriceToken() {
-    if (assetToken.id && priceToken.id) {
-      return `${assetToken.name}/${priceToken.name}`
-    }
-  }
-
-  function onChangeAssetToken(token) {
-    if (token.id !== assetToken.id) {
-      setAssetToken(token)
-      setMakes([])
-      setLastPrice(0)
-    }
-  }
-
-  function onChangePriceToken(token) {
-    if (token.id !== priceToken.id) {
-      setPriceToken(token)
-      setMakes([])
-      setLastPrice(0)
+    if (tokenPair.name) {
+      return tokenPair.tokens[0].name
     }
   }
 
@@ -435,36 +439,55 @@ const Transaction = () => {
     }
   }
 
+  const handlePairClick = (pair) => {
+    setTokenPair(pair)
+    setShowPairSelectModal(false)
+  }
+
   return (
     <div className="swap-wrapper">
       <div className="trade-container">
         <div className="make-wrapper">
-          <div className="container-header">Trade</div>
-          <TokenInput
-            label="Sell"
-            tokens={pool}
-            defaultTokenId={assetToken.id || (pool.length && pool[0].id)}
-            value={amount}
-            onTokenChange={(token) => onChangeAssetToken(token)}
-            onAmountChange={(amount) => setAmount(amount)} />
+          <div className="container-header">Trade
+            {
+              tokenPair.name ? (
+                <div className="token-pair-select" onClick={() => setShowPairSelectModal(true)}>
+                  <div className="token-pair-name">{tokenPair.name}</div>
+                </div>
+              ) : null
+            }
+          </div>
+          <div className="trade-type-switch">
+            <div className={`trade-type-item ${tradeType === 'buy' ? 'trade-buy' : ''}`} onClick={() => setTradeType('buy')}>Buy</div>
+            <div className={`trade-type-item ${tradeType === 'sell' ? 'trade-sell' : ''}`} onClick={() => setTradeType('sell')}>Sell</div>
+          </div>
           <div className="form-item">
             <div className="item-title">Price
-              <span className="hint">{generatePriceHint()}</span>
+              <span className="hint">{getPriceHint()}</span>
             </div>
             <div className="input-wrapper">
               <Input placeholder="0.0" value={price} decimals="9" onChange={(amount) => setPrice(amount)} />
             </div>
           </div>
-          <TokenInput
-            label="Will Get"
-            tokens={pool}
-            defaultTokenId={priceToken.id || (pool.length && pool[1].id)}
-            value={total}
-            inputDisabled
-            withMax={false}
-            onTokenChange={(token) => onChangePriceToken(token)} />
+          <div className="form-item">
+            <div className="item-title">Amount
+              <span className="hint">{getAmountHint()}</span>
+            </div>
+            <div className="input-wrapper">
+              <Input placeholder="0.0" value={amount} decimals={tokenPair.tokens ? tokenPair.tokens[0].decimals : '9'} onChange={(amount) => setAmount(amount)} />
+            </div>
+          </div>
+          <div className="form-item">
+            <div className="item-title">Total {tradeType === 'buy' ? 'Need' : 'Receive'}
+              <span className="hint">{getPriceHint()}</span>
+            </div>
+            <div className="input-wrapper">
+              <Input placeholder="0.0" value={total} decimals="9" onChange={(amount) => setTotal(amount)} />
+            </div>
+          </div>
+          { tokenPair.name ? <div className="balance-line">Balance: <span>{tokenBalance} {tradeType === 'buy' ? tokenPair.tokens[1].name : tokenPair.tokens[0].name}</span></div> : null }
           { feeRate ? <p className="fee-rate">* The fee rate of transaction is {feeRate / 100}%</p> : null }
-          { isValid ? <div className="make-btn" onClick={() => onMake()}>Sell</div> : <div className="make-btn disabled">Sell</div> }
+          { isValid ? <div className={`make-btn make-btn-${tradeType}`} onClick={() => onMake()}>{tradeType.toUpperCase()} {tokenPair.tokens[0].name}</div> : <div className="make-btn disabled">{tradeType.toUpperCase()} {tokenPair.tokens ? tokenPair.tokens[0].name : ''}</div> }
         </div>
         <div className="trade-panel">
           <div className="panel-header">
@@ -477,7 +500,7 @@ const Transaction = () => {
           <div className="list-title">
             <div className="blank-placeholder"></div>
             <div className="title-items">
-              <div className="item-text">Price ({getPriceToken()})</div>
+              <div className="item-text">Price ({getPriceHint()})</div>
               <div className="item-text">Amount ({getAmountHint()})</div>
               { makeView === 'my' && <div className="item-placeholder"></div> }
             </div>
@@ -509,6 +532,38 @@ const Transaction = () => {
         {generateTokenPool()}
         </div>
       </div>
+      {
+        showPairSelectModal ? (
+          <div className="modal-overlay">
+            <div className="modal-wrapper">
+              <div className="close-btn" onClick={() => setShowPairSelectModal(false)}></div>
+              <div className="pair-select-modal-wrapper">
+                <div className="pair-select-modal-title">Select</div>
+                <input type="text" className="pair-select-modal-input" value={pairNameKeyword} onInput={(e) => setPairNameKeyword(e.target.value)} />
+                <div className="pair-select-modal-list">
+                  {
+                    pairs.filter((p) => {
+                      const nameLC = p.name.toLowerCase()
+                      const tNames = pairNameKeyword.split(' ').filter((n) => n)
+                      
+                      return tNames.reduce((a, b) => a && nameLC.indexOf(b) >= 0, true)
+                    }).map((p) => {
+                      return (
+                        <div key={p.name} className="pair-select-modal-list-item" onClick={() => handlePairClick(p)}>
+                          {
+                            p.tokens.map((t) => <div key={`${p.name}-${t.name}`} className={`pair-select-modal-list-item-icon icon-${t.name}`}></div>)
+                          }
+                          <div className="pair-select-modal-list-item-name">{p.name}</div>
+                        </div>
+                      )
+                    })
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null
+      }
     </div>
   )
 }

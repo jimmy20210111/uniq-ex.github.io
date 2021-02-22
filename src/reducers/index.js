@@ -4,13 +4,15 @@ import { wallet } from './wallet'
 import { common } from './common'
 import { gov } from './gov'
 import { swap } from './swap'
+import { staking } from './staking'
 
 const reducers = combineReducers({
   modal,
   wallet,
   common,
   gov,
-  swap
+  swap,
+  staking
 })
 
 export default reducers

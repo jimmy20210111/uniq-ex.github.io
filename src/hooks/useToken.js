@@ -41,7 +41,7 @@ export const useFetchTokens = () => {
           distributionInfo.startTimeStamp = strReader.readUint128()
           distributionInfo.settledTimeStamp = strReader.readUint128()
     
-          const pools = []
+          const pools = {}
           const poolCount = strReader.readNextLen()
           for (let i = 0; i < poolCount; i++) {
             const pool = {}
@@ -49,7 +49,7 @@ export const useFetchTokens = () => {
             pool.name = hexstr2str(strReader.read(nameLength))
             pool.address = reverseHex(strReader.read(20))
             pool.weight = strReader.readUint128()
-            pools.push(pool)
+            pools[pool.name] = pool
           }
     
           const upgrade = strReader.readBoolean()

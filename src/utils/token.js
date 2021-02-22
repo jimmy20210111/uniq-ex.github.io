@@ -1,5 +1,6 @@
 import { client } from '@ont-dev/ontology-dapi'
 import { utils } from 'ontology-ts-sdk'
+import BigNumber from 'bignumber.js'
 import request from './request'
 
 const { reverseHex } = utils
@@ -19,12 +20,19 @@ export const getTokenBalance = (account, token, cb) => {
     }
     let invokeMethod = client.api.smartContract.invokeRead
 
-    if (token.ty === 3 || token.ty === 4) {
+    if (token.ty === 2 || token.ty === 3) {
       invokeMethod = client.api.smartContract.invokeWasmRead
     }
     invokeMethod(param).then((bl) => {
       if (bl) {
-        cb(parseInt(reverseHex(bl), 16) / (10 ** token.decimals))
+        const str = reverseHex(bl).split('').reverse()
+        let total = new BigNumber(0)
+        
+        for (let i = 0; i < str.length; i++) {
+          total = total.plus(new BigNumber(16 ** i).times(parseInt(str[i], 16)))
+        }
+        
+        cb(total.div(10 ** token.decimals).toString())
       }
     })
   } else {
@@ -43,10 +51,17 @@ export const getTokenBalance = (account, token, cb) => {
   }
 }
 
-export const getLPTokenDom = (name, cls = '') => {
-  return (
-    <div className={`lp-token-wrapper ${cls}`}>
-      { name.split('-').slice(1).map((tokenName) => (<div className={`lp-token icon-${tokenName}`} />)) }
-    </div>
-  )
+export const getTokenIconDom = (token, cls = '') => {
+  if (token.id) {
+    return (
+      <div className={`token-icon-wrapper ${cls}`}>
+        {
+          token.ty === 3
+            ? token.name.split('-').slice(1).map((tokenName) => (<div key={`${token.name}-${tokenName}`} className={`token-icon-item with-drop-shadow icon-${tokenName}`} />))
+            : (<div className={`token-icon-item icon-${token.name}`} />)
+        }
+      </div>
+    )
+  }
+  return null
 }

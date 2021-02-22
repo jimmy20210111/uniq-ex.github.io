@@ -1,13 +1,12 @@
 import { client } from '@ont-dev/ontology-dapi'
 import React, { useState, useEffect, useCallback } from 'react'
 import { useHistory } from "react-router-dom"
-import { useMappedState, useDispatch } from 'redux-react-hook';
+import { useMappedState, useDispatch } from 'redux-react-hook'
 import { useAlert } from 'react-alert'
 import BigNumber from 'bignumber.js'
 import TokenInput from '../../components/tokenInput'
-import { SWAP_ADDRESS, TRANSACTION_BASE_URL, TRANSACTION_AFTERFIX } from '../../config'
-import { useFetchPairs } from '../../hooks/usePair';
-import { SLIPPAGE } from '../../utils/constants'
+import { TRANSACTION_BASE_URL, TRANSACTION_AFTERFIX } from '../../config'
+import { useFetchPairs } from '../../hooks/usePair'
 import { toLocaleFixed } from '../../utils/common'
 import { bestSwap } from '../../utils/swap'
 import './index.css'
@@ -22,10 +21,13 @@ const Swap = () => {
   const [isValidSwap, setIsValidSwap] = useState(false)
   const [bestPath, setBestPath] = useState([])
   const [showPrice, setShowPrice] = useState(false)
-  const { account, pairs, swapTokens } = useMappedState((state) => ({
+  const [balanceChange, setBalanceChange] = useState(0)
+  const { account, slippage, pairs, swapTokens, SWAP_ADDRESS } = useMappedState((state) => ({
     account: state.wallet.account,
+    slippage: state.wallet.slippage,
     pairs: state.swap.pairs,
-    swapTokens: state.swap.tokens
+    swapTokens: state.swap.tokens,
+    SWAP_ADDRESS: state.gov.poolStat.pools.swap.address
   }))
   const dispatch = useDispatch()
   const setModal = useCallback((modalType, modalDetail) => dispatch({ type: 'SET_MODAL', modalType, modalDetail }), [])
@@ -138,55 +140,61 @@ const Swap = () => {
       return
     }
 
-    try {
-      const args = [
-        {
-          type: 'Address',
-          value: account
-        },
-        {
-          type: 'Long',
-          value: new BigNumber(token1Amount).times(new BigNumber(10 ** token1.decimals)).integerValue(BigNumber.ROUND_DOWN).toString()
-        },
-        {
-          type: 'Long',
-          value: new BigNumber(token2Amount).times(new BigNumber(10 ** token2.decimals)).integerValue(BigNumber.ROUND_DOWN).toString()
-        },
-        {
-          type: 'Array',
-          value: bestPath.map((p) => ({ type: 'Long', value: p }))
-        },
-        {
-          type: 'Address',
-          value: account
-        }
-      ]
-      const swapResult = await client.api.smartContract.invokeWasm({
-        scriptHash: SWAP_ADDRESS,
-        operation: swapType === 'exactin' ? 'swap_exact_tokens_for_tokens' : 'swap_tokens_for_exact_tokens',
-        args,
-        gasPrice: 2500,
-        gasLimit: 30000000,
-        requireIdentity: false
-      })
+    if (SWAP_ADDRESS) {
+      try {
+        const args = [
+          {
+            type: 'Address',
+            value: account
+          },
+          {
+            type: 'Long',
+            value: new BigNumber(token1Amount).times(new BigNumber(10 ** token1.decimals)).integerValue(BigNumber.ROUND_DOWN).toString()
+          },
+          {
+            type: 'Long',
+            value: new BigNumber(token2Amount).times(new BigNumber(10 ** token2.decimals)).integerValue(BigNumber.ROUND_DOWN).toString()
+          },
+          {
+            type: 'Array',
+            value: bestPath.map((p) => ({ type: 'Long', value: p }))
+          },
+          {
+            type: 'Address',
+            value: account
+          }
+        ]
+        const swapResult = await client.api.smartContract.invokeWasm({
+          scriptHash: SWAP_ADDRESS,
+          operation: swapType === 'exactin' ? 'swap_exact_tokens_for_tokens' : 'swap_tokens_for_exact_tokens',
+          args,
+          gasPrice: 2500,
+          gasLimit: 60000000,
+          requireIdentity: false
+        })
 
-      if (swapResult.transaction) {
+        if (swapResult.transaction) {
+          setBalanceChange(balanceChange + 1)
+          setToken1Amount('')
+          setToken2Amount('')
+          setModal('infoModal', {
+            show: true,
+            type: 'success',
+            text: 'Transaction Successful',
+            extraText: 'View Transaction',
+            extraLink: `${TRANSACTION_BASE_URL}${swapResult.transaction}${TRANSACTION_AFTERFIX}`
+          })
+        }
+      } catch (e) {
         setModal('infoModal', {
           show: true,
-          type: 'success',
-          text: 'Transaction Successful',
-          extraText: 'View Transaction',
-          extraLink: `${TRANSACTION_BASE_URL}${swapResult.transaction}${TRANSACTION_AFTERFIX}`
+          type: 'error',
+          text: 'Transaction Failed',
+          // extraText: `${e}`,
+          extraText: '',
+          extraLink: ''
         })
       }
-    } catch (e) {
-      setModal('infoModal', {
-        show: true,
-        type: 'error',
-        text: 'Transaction Failed',
-        extraText: `${e}`,
-        extraLink: ''
-      })
     }
   }
 
@@ -196,9 +204,9 @@ const Swap = () => {
 
   function getMinReceiveOrMaxSold() {
     if (swapType === 'exactin') {
-      return <p>Minimum Received:<span>{toLocaleFixed(token2Amount * (1 - SLIPPAGE), 6)} {token2.name}</span></p>
+      return <p>Minimum Received:<span>{toLocaleFixed(token2Amount * (1 - slippage / 100), 6)} {token2.name}</span></p>
     } else {
-      return <p>Maximum Sold:<span>{toLocaleFixed(token1Amount * (1 + SLIPPAGE), 6)} {token1.name}</span></p>
+      return <p>Maximum Sold:<span>{toLocaleFixed(token1Amount * (1 + slippage / 100), 6)} {token1.name}</span></p>
     }
   }
 
@@ -243,6 +251,7 @@ const Swap = () => {
         </div>
         <div className="sw-content">
           <TokenInput
+            balanceChange={balanceChange}
             label="From"
             tokens={swapTokens}
             value={token1Amount}
@@ -251,6 +260,7 @@ const Swap = () => {
             onAmountChange={(amount) => onToken1AmountChange(amount)} />
           <div className="icon-arrow-down"></div>
           <TokenInput
+            balanceChange={balanceChange}
             label="To"
             tokens={swapTokens}
             value={token2Amount}
@@ -260,7 +270,7 @@ const Swap = () => {
             onAmountChange={(amount) => onToken2AmountChange(amount)} />
           { showPrice ? <div className="sw-price-wrapper">Price<span className="sw-price-info">{getPrice()}</span></div> : null }
           { isValidPair ? null : <div className="add-liquidity-hint">Add liquidity to enable swaps for this pair.</div> }
-          { isValidPair ? ( isValidSwap ? <div className="sw-swap-btn" onClick={() => handleSwap()}>Swap</div> : <div className="sw-swap-btn disabled">Swap</div> ) : <div className="sw-swap-btn disabled">Illiquidity</div> }
+          { isValidPair ? ( isValidSwap ? <div className="sw-swap-btn" onClick={() => handleSwap()}>Swap</div> : <div className="sw-swap-btn disabled">Swap</div> ) : <div className="sw-swap-btn disabled">Invalid Liquidity</div> }
         </div>
         {
           isValidPair && isValidSwap ? (

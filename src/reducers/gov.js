@@ -1,7 +1,12 @@
 const initState = {
   poolStat: {
     distributionInfo: {},
-    pools: [],
+    pools: {
+      staking: {},
+      swap: {},
+      dex: {},
+      synth: {}
+    },
     upgrade: false
   }
 }

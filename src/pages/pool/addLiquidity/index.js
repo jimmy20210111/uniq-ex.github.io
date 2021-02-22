@@ -6,8 +6,7 @@ import { useAlert } from 'react-alert'
 import BigNumber from 'bignumber.js'
 import TokenInput from '../../../components/tokenInput'
 import { useFetchPairs } from '../../../hooks/usePair';
-import { SWAP_ADDRESS, TRANSACTION_BASE_URL, TRANSACTION_AFTERFIX } from '../../../config'
-import { SLIPPAGE } from '../../../utils/constants'
+import { TRANSACTION_BASE_URL, TRANSACTION_AFTERFIX } from '../../../config'
 import './index.css'
 
 const AddLiquidity = () => {
@@ -18,10 +17,13 @@ const AddLiquidity = () => {
   const [isValidPair, setIsValidPair] = useState(true)
   const [isFirstProvider, setIsFirstProvider] = useState(false)
   const [showPriceInfo, setShowPriceInfo] = useState(false)
-  const { account, pairs, swapTokens } = useMappedState((state) => ({
+  const [balanceChange, setBalanceChange] = useState(0)
+  const { account, slippage, pairs, swapTokens, SWAP_ADDRESS } = useMappedState((state) => ({
     account: state.wallet.account,
+    slippage: state.wallet.slippage,
     pairs: state.swap.pairs,
-    swapTokens: state.swap.tokens
+    swapTokens: state.swap.tokens,
+    SWAP_ADDRESS: state.gov.poolStat.pools.swap.address
   }))
   const dispatch = useDispatch()
   const setModal = useCallback((modalType, modalDetail) => dispatch({ type: 'SET_MODAL', modalType, modalDetail }), [])
@@ -39,7 +41,8 @@ const AddLiquidity = () => {
   }, [token1, token2])
 
   useEffect(() => {
-    if (token1.id && token2.id && token1.id != token2.id && (!pairs.length || !getPairByToken())) {
+    const pair = getPairByToken()
+    if (token1.id && token2.id && token1.id != token2.id && (!pairs.length || !pair || (pair.reserve1 === 0 && pair.reserve2 === 0))) {
       setIsFirstProvider(true)
     } else {
       setIsFirstProvider(false)
@@ -83,7 +86,7 @@ const AddLiquidity = () => {
 
   function onToken1AmountChange(amount) {
     setToken1Amount(amount)
-    if (pairs.length && !!getPairByToken()) {
+    if (!isFirstProvider) {
       if (amount) {
         setToken2Amount(Math.ceil(amount * getPairPrice() * (10 ** token2.decimals)) / (10 ** token2.decimals))
       } else if (Number(amount) === 0) {
@@ -94,7 +97,7 @@ const AddLiquidity = () => {
 
   function onToken2AmountChange(amount) {
     setToken2Amount(amount)
-    if (pairs.length && !!getPairByToken()) {
+    if (!isFirstProvider) {
       if (amount) {
         setToken1Amount(Math.ceil(amount / getPairPrice() * (10 ** token1.decimals)) / (10 ** token1.decimals))
       } else if (Number(amount) === 0) {
@@ -105,13 +108,16 @@ const AddLiquidity = () => {
 
   function getPairPrice() {
     if (token1.id && token2.id && pairs.length) {
+      if (isFirstProvider && token1Amount && token2Amount) {
+        return token2Amount / token1Amount
+      }
       let pair = pairs.find((p) => p.token1 === token1.id && p.token2 === token2.id)
       if (pair) {
-        return (pair.reserve2 / (10 ** token2.decimals)) / (pair.reserve1 / (10 ** token1.decimals))
+        return pair.reserve1 ? (pair.reserve2 / (10 ** token2.decimals)) / (pair.reserve1 / (10 ** token1.decimals)) : 0
       }
       pair = pairs.find((p) => p.token1 === token2.id && p.token2 === token1.id)
       if (pair) {
-        return (pair.reserve1 / (10 ** token1.decimals)) / (pair.reserve2 / (10 ** token2.decimals))
+        return pair.reserve2 ? (pair.reserve1 / (10 ** token1.decimals)) / (pair.reserve2 / (10 ** token2.decimals)) : 0
       }
     }
 
@@ -150,67 +156,73 @@ const AddLiquidity = () => {
       return
     }
 
-    try {
-      const args = [
-        {
-          type: 'Address',
-          value: account
-        },
-        {
-          type: 'Long',
-          value: token1.id
-        },
-        {
-          type: 'Long',
-          value: token2.id
-        },
-        {
-          type: 'Long',
-          value: new BigNumber(token1Amount).times(new BigNumber(10 ** token1.decimals)).integerValue(BigNumber.ROUND_UP).toString()
-        },
-        {
-          type: 'Long',
-          value: new BigNumber(token2Amount).times(new BigNumber(10 ** token2.decimals)).integerValue(BigNumber.ROUND_UP).toString()
-        },
-        {
-          type: 'Long',
-          value: new BigNumber(token1Amount).times(new BigNumber(10 ** token1.decimals)).times(1 - SLIPPAGE).integerValue(BigNumber.ROUND_UP).toString()
-        },
-        {
-          type: 'Long',
-          value: new BigNumber(token2Amount).times(new BigNumber(10 ** token2.decimals)).times(1 - SLIPPAGE).integerValue(BigNumber.ROUND_UP).toString()
-        },
-        {
-          type: 'Address',
-          value: account
-        }
-      ]
-      const addResult = await client.api.smartContract.invokeWasm({
-        scriptHash: SWAP_ADDRESS,
-        operation: 'add_liquidity',
-        args,
-        gasPrice: 2500,
-        gasLimit: 30000000,
-        requireIdentity: false
-      })
+    if (SWAP_ADDRESS) {
+      try {
+        const args = [
+          {
+            type: 'Address',
+            value: account
+          },
+          {
+            type: 'Long',
+            value: token1.id
+          },
+          {
+            type: 'Long',
+            value: token2.id
+          },
+          {
+            type: 'Long',
+            value: new BigNumber(token1Amount).times(new BigNumber(10 ** token1.decimals)).integerValue(BigNumber.ROUND_UP).toString()
+          },
+          {
+            type: 'Long',
+            value: new BigNumber(token2Amount).times(new BigNumber(10 ** token2.decimals)).integerValue(BigNumber.ROUND_UP).toString()
+          },
+          {
+            type: 'Long',
+            value: new BigNumber(token1Amount).times(new BigNumber(10 ** token1.decimals)).times(1 - slippage / 100).integerValue(BigNumber.ROUND_UP).toString()
+          },
+          {
+            type: 'Long',
+            value: new BigNumber(token2Amount).times(new BigNumber(10 ** token2.decimals)).times(1 - slippage / 100).integerValue(BigNumber.ROUND_UP).toString()
+          },
+          {
+            type: 'Address',
+            value: account
+          }
+        ]
+        const addResult = await client.api.smartContract.invokeWasm({
+          scriptHash: SWAP_ADDRESS,
+          operation: 'add_liquidity',
+          args,
+          gasPrice: 2500,
+          gasLimit: 60000000,
+          requireIdentity: false
+        })
 
-      if (addResult.transaction) {
+        if (addResult.transaction) {
+          setBalanceChange(balanceChange + 1)
+          setToken1Amount('')
+          setToken2Amount('')
+          setModal('infoModal', {
+            show: true,
+            type: 'success',
+            text: 'Transaction Successful',
+            extraText: 'View Transaction',
+            extraLink: `${TRANSACTION_BASE_URL}${addResult.transaction}${TRANSACTION_AFTERFIX}`
+          })
+        }
+      } catch (e) {
         setModal('infoModal', {
           show: true,
-          type: 'success',
-          text: 'Transaction Successful',
-          extraText: 'View Transaction',
-          extraLink: `${TRANSACTION_BASE_URL}${addResult.transaction}${TRANSACTION_AFTERFIX}`
+          type: 'error',
+          text: 'Transaction Failed',
+          // extraText: `${e}`,
+          extraText: '',
+          extraLink: ''
         })
       }
-    } catch (e) {
-      setModal('infoModal', {
-        show: true,
-        type: 'error',
-        text: 'Transaction Failed',
-        extraText: `${e}`,
-        extraLink: ''
-      })
     }
   }
 
@@ -228,12 +240,14 @@ const AddLiquidity = () => {
           ) : null
         }
         <TokenInput
+          balanceChange={balanceChange}
           tokens={swapTokens}
           value={token1Amount}
           onTokenChange={(token) => onChangeToken1(token)}
           onAmountChange={(amount) => onToken1AmountChange(amount)} />
         <div className="icon-plus"></div>
         <TokenInput
+          balanceChange={balanceChange}
           tokens={swapTokens}
           value={token2Amount}
           defaultTokenId={swapTokens.length && swapTokens[1].id}
@@ -247,7 +261,7 @@ const AddLiquidity = () => {
                 <div className="price-item-label">{token2.name} per {token1.name}</div>
               </div>
               <div className="al-price-item">
-                <div className="price-item-detail">{(1 / getPairPrice()).toFixed(4)}</div>
+                <div className="price-item-detail">{(getPairPrice() ? 1 / getPairPrice() : 0).toFixed(4)}</div>
                 <div className="price-item-label">{token1.name} per {token2.name}</div>
               </div>
               <div className="al-price-item">

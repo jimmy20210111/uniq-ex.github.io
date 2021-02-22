@@ -1,3 +1,28 @@
+/* token selection */
+.token-select {
+  width: 140px;
+  height: 44px;
+  border-right: 1px solid #e5e5e5;
+}
+
+.token-select > div[class*="-control"] {
+  border: 1px solid transparent;
+  border-radius: 8px 0 0 8px;
+  box-shadow: none;
+}
+
+.token-select > div[class*="-control"] > div:first-child {
+  padding: 12px 6px;
+}
+
+.token-select div[class*="-ValueContainer"] {
+  padding: 16px 6px;
+}
+
+.token-select span[class*="-indicatorSeparator"] {
+  display: none;
+}
+
 .token-input-wrapper {
   margin: 10px 0 40px;
   padding: 0 24px;

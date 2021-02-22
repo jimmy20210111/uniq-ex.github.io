@@ -1,13 +1,12 @@
 import { client } from '@ont-dev/ontology-dapi'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useHistory } from "react-router-dom"
 import { utils } from 'ontology-ts-sdk'
 import BigNumber from 'bignumber.js'
-import Tooltip from 'rc-tooltip';
+import Tooltip from 'rc-tooltip'
 import { useAlert } from 'react-alert'
-import { useMappedState } from 'redux-react-hook'
-import { STAKING_ADDRESS } from '../../config'
-import { getLPTokenDom } from '../../utils/token'
+import { useMappedState, useDispatch } from 'redux-react-hook'
+import { getTokenIconDom } from '../../utils/token'
 
 import 'rc-tooltip/assets/bootstrap.css'
 import './index.css'
@@ -15,12 +14,15 @@ import './index.css'
 const { StringReader } = utils
 
 const Staking = () => {
-  const [stakingTokens, setStakingTokens] = useState([])
-  const { account, tokens } = useMappedState((state) => ({
+  const [showClosed, setShowClosed] = useState(false)
+  const { account, tokens, stakingTokens, STAKING_ADDRESS } = useMappedState((state) => ({
     account: state.wallet.account,
-    tokens: state.common.tokens
+    tokens: state.common.tokens,
+    stakingTokens: state.staking.tokens,
+    STAKING_ADDRESS: state.gov.poolStat.pools.staking.address
   }))
-
+  const dispatch = useDispatch()
+  const setStakingTokens = useCallback((tokens) => dispatch({ type: 'SET_STAKING_TOKENS', tokens }), [])
   const history = useHistory()
   const Alert = useAlert()
 
@@ -30,10 +32,10 @@ const Staking = () => {
     return () => {
       interval && clearInterval(interval)
     }
-  }, [tokens])
+  }, [tokens, STAKING_ADDRESS])
 
   function getStakingTokenBalance() {
-    if (tokens.length) {
+    if (tokens.length && STAKING_ADDRESS) {
       try {
         client.api.smartContract.invokeWasmRead({
           scriptHash: STAKING_ADDRESS,
@@ -53,13 +55,8 @@ const Staking = () => {
             parsedTokens.push(Object.assign(tempToken, token))
           }
 
-          const tokenMap = {}
-          for (let i = 0; i < parsedTokens.length; i++) {
-            tokenMap[parsedTokens[i].id] = parsedTokens[i]
-          }
-
-          const totalWeight = Object.values(tokenMap).filter((t) => t.balance).reduce((a, b) => a + b.weight, 0)
-          const filteredTokens = Object.values(tokenMap).map((t) => {
+          const totalWeight = parsedTokens.filter((t) => t.balance).reduce((a, b) => a + b.weight, 0)
+          const filteredTokens = parsedTokens.map((t) => {
             return {
               ...t,
               originWeight: t.weight,
@@ -120,17 +117,20 @@ const Staking = () => {
 
   function generateStakingPool() {
     if (stakingTokens.length) {
-      return stakingTokens.map((token) => {
+      const openStakingTokens = stakingTokens.filter((t) => !!t.originWeight)
+      const closedStakingTokens = stakingTokens.filter((t) => !t.originWeight)
+
+      return (showClosed ? closedStakingTokens : openStakingTokens).map((token) => {
         return (
-          <div className="pool-list-item" key={token.name}>
+          <div className={`pool-list-item ${!showClosed ? '' : 'pool-list-item-disabled'}`} key={token.name}>
             <div className="item-detail">
               <div className="item-detail-wrapper">
-                { token.ty === 4 && <div className="corner-badge">10X</div> }
+                { token.ty === 3 && <div className="corner-badge">10X</div> }
                 <div className="staking-token">
                   {
-                    token.ty === 4 ? (
+                    token.ty === 3 ? (
                       <div className="staking-text">Deposit
-                        {getLPTokenDom(token.name, 'stake-lp-token')}
+                        {getTokenIconDom(token, 'stake-lp-token')}
                       </div>
                     ) : (
                       <div className={`staking-text icon-${token.name}`}>Deposit</div>
@@ -146,7 +146,7 @@ const Staking = () => {
                 </div>
                 <div className="earn-line">Earn<span>UNX</span></div>
                 <div className="total-staking">Total Staking<span>{new BigNumber(token.balance || 0).div(10 ** token.decimals).toString()}</span></div>
-                <div className="select-btn" onClick={() => onSelectToken(token)}>Stake</div>
+                <div className="select-btn" onClick={() => onSelectToken(token)}>{ showClosed ? 'Unstake' : 'Stake' }</div>
               </div>
             </div>
           </div>
@@ -158,10 +158,19 @@ const Staking = () => {
   return (
     <div className="stake-container">
       <div className="stake-pool">
-        <div className="title"></div>
+        { !stakingTokens.length ? <div className="title">Loading...</div> : null }
+        {
+          showClosed ? (
+            <div className="unstake-pool-title">
+              <div className="back-icon" onClick={() => setShowClosed(false)}></div>
+              Unstake from Closed Pool
+            </div>
+          ) : null
+        }
         <div className="pool-list">
           {generateStakingPool()}
         </div>
+        { !showClosed ? <div className="closed-pool-entrance" onClick={() => setShowClosed(true)}>Unstake from Closed Pool</div> : null }
       </div>
     </div>
   )

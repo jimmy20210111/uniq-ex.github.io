@@ -4,17 +4,17 @@ import { useHistory } from "react-router-dom"
 import { useMappedState } from 'redux-react-hook';
 import { utils } from 'ontology-ts-sdk'
 import { useFetchPairs } from '../../hooks/usePair'
-import { SWAP_ADDRESS } from '../../config'
 import './index.css'
 
 const { StringReader } = utils
 
 const Pool = () => {
   const [liquidityBalance, setLiquidityBalance] = useState([])
-  const { account, tokens, pairs } = useMappedState((state) => ({
+  const { account, tokens, pairs, SWAP_ADDRESS } = useMappedState((state) => ({
     account: state.wallet.account,
     tokens: state.common.tokens,
-    pairs: state.swap.pairs
+    pairs: state.swap.pairs,
+    SWAP_ADDRESS: state.gov.poolStat.pools.swap.address
   }))
 
   const history = useHistory()
@@ -22,7 +22,7 @@ const Pool = () => {
   useFetchPairs()
 
   useEffect(() => {
-    if (account && pairs.length) {
+    if (account && pairs.length && SWAP_ADDRESS) {
       const getLiquidityBalanceByPairId = (id) => {
         return client.api.smartContract.invokeWasmRead({
           scriptHash: SWAP_ADDRESS,
@@ -48,7 +48,7 @@ const Pool = () => {
         setLiquidityBalance(resp)
       })
     }
-  }, [account, pairs])
+  }, [account, pairs, SWAP_ADDRESS])
 
   function onNavigateToSwap() {
     history.push('/swap')
@@ -63,8 +63,9 @@ const Pool = () => {
   }
 
   function generateLiquidityList() {
-    if (liquidityBalance.length && pairs.length && tokens.length) {
-      return liquidityBalance.map((lb) => {
+    const myLiquidities = liquidityBalance.filter((l) => l[Object.keys(l)[0]])
+    if (myLiquidities.length && pairs.length && tokens.length) {
+      return myLiquidities.map((lb) => {
         const pairId = Object.keys(lb)[0]
         const pair = pairs.find((p) => `${p.id}` === pairId)
         const token1 = tokens.find((t) => t.id === pair.token1)

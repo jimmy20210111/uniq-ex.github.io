@@ -77,13 +77,14 @@
   position: relative;
   float: right;
   margin-top: 18px;
-  padding: 0 20px 0 40px;
+  padding: 0 40px;
   line-height: 44px;
   border-radius: 24px;
+  cursor: pointer;
   background: RGBA(43, 190, 127, 0.1);
 }
 
-.account-address:after {
+.account-address:before {
   position: absolute;
   content: '';
   left: 20px;
@@ -95,14 +96,19 @@
   background: RGBA(43, 190, 127, 1.00);
 }
 
-.signout-btn {
-  float: right;
-  cursor: pointer;
-  padding: 4px 10px;
-  margin-top: 24px;
-  border: 1px solid RGBA(254, 51, 47, 1.00);
-  border-radius: 20px;
-  color: RGBA(254, 51, 47, 1.00);
+.account-address:after {
+  position: absolute;
+  content: '';
+  right: 20px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  background: url('../../assets/triangle_down.png') center / 10px auto no-repeat;
+}
+
+.account-address.triangle-up:after {
+  transform: rotate(180deg);
+  transition: all .5s;
 }
 
 .connect-btn {
@@ -117,9 +123,64 @@
 
 .profile-panel {
   position: absolute;
-  top: 100%;
+  top: 88px;
   right: 0;
+  width: 280px;
+  padding: 20px;
   border-radius: 8px;
   box-shadow: 0 0 10px rgba(0, 0, 0, .07);
   background: #fff;
+}
+
+.setting-section-title {
+  padding-left: 28px;
+  font-weight: bold;
+  background: url('../../assets/setting.png') left top / 20px auto no-repeat;
+}
+
+.slippage-setting {
+  display: flex;
+  margin-top: 12px;
+}
+
+.slippage-item {
+  width: 60px;
+  margin-right: 12px;
+  line-height: 24px;
+  font-size: 12px;
+  text-align: center;
+  border-radius: 20px;
+  cursor: pointer;
+  background: #E7E7E7;
+}
+
+.slippage-item.selected {
+  color: #fff;
+  background: RGBA(43, 190, 127, 1.00);
+}
+
+.slippage-input-wrapper {
+  display: flex;
+  flex: 1;
+  border-bottom: 1px solid #949494;
+}
+
+.slippage-input-wrapper .slippage-input {
+  width: 90px;
+  padding: 0 8px 0 0;
+  text-align: right;
+  border: none;
+  outline: none;
+}
+
+.signout-btn {
+  margin: 24px auto 0;
+  width: 120px;
+  text-align: center;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 20px;
+  color: #fff;
+  background: RGBA(254, 51, 47, 1.00);
+
 }

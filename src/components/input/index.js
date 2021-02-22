@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 const Input = (props) => {
-  const { value = '', round, disabled, decimals, inline = true, onChange } = props
+  const { value = '', cls = '', round, disabled, decimals, inline = true, onChange } = props
   const [val, setVal] = useState('')
 
   useEffect(() => {
@@ -47,7 +47,7 @@ const Input = (props) => {
 
   return (
     <input
-      className={`input ${inline ? 'inline-input' : ''}`}
+      className={`input ${inline ? 'inline-input' : ''} ${cls}`}
       type="text"
       placeholder={placeholder}
       value={val}
