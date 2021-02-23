@@ -8,7 +8,6 @@ import { useAlert } from 'react-alert'
 import { useMappedState, useDispatch } from 'redux-react-hook'
 import { getTokenIconDom } from '../../utils/token'
 
-import 'rc-tooltip/assets/bootstrap.css'
 import './index.css'
 
 const { StringReader } = utils

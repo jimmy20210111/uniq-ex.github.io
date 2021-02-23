@@ -7,7 +7,7 @@ import { getTokenBalance } from '../../utils/token'
 import './index.css'
 
 const TokenInput = (props) => {
-  const { value, round, tokens, defaultTokenId, inputDisabled = false, showBalance = true, withMax = true, onTokenChange, onAmountChange, balanceChange = 0 } = props
+  const { cls, value, round, tokens, defaultTokenId, inputDisabled = false, showBalance = true, withMax = true, onTokenChange, onAmountChange, balanceChange = 0 } = props
   const [token, setToken] = useState({})
   const [balance, setBalance] = useState('-')
   const { account } = useMappedState((state) => ({
@@ -31,22 +31,28 @@ const TokenInput = (props) => {
 
   const renderTokenSeletion = (defaultId) => {
     if (tokens.length) {
-      const CustomOption = (props) => (
-        <components.Option {...props}>
-          <div className="option-wrapper">
-            <div className={`icon-${props.label} option-icon`}></div>
-            <div className="option-label">{props.label}</div>
-          </div>
-        </components.Option>
-      )
-      const SingleValue = ({ children, ...props }) => (
-        <components.SingleValue {...props}>
-          <div className="option-wrapper">
-            <div className={`icon-${children} option-icon`}></div>
-            <div className="option-label">{children}</div>
-          </div>
-        </components.SingleValue>
-      )
+      const CustomOption = (props) => {
+        const label = props.label.split(' ')[0]
+        return (
+          <components.Option {...props}>
+            <div className="option-wrapper">
+              <div className={`icon-${label} option-icon`}></div>
+              <div className="option-label">{props.label}</div>
+            </div>
+          </components.Option>
+        )
+      }
+      const SingleValue = ({ children, ...props }) => {
+        const label = children.split(' ')[0]
+        return (
+          <components.SingleValue {...props}>
+            <div className="option-wrapper">
+              <div className={`icon-${label} option-icon`}></div>
+              <div className="option-label">{children}</div>
+            </div>
+          </components.SingleValue>
+        )
+      }
       let defaultToken = defaultId ? (tokens.find((t) => t.id === defaultId) || tokens[0]) : tokens[0]
 
       if (!token.id || !tokens.find((t) => t.id === token.id)) {
@@ -55,7 +61,7 @@ const TokenInput = (props) => {
 
       return (
         <Select
-          className="token-select"
+          className={`token-select ${cls}`}
           defaultValue={defaultToken}
           options={tokens}
           isSearchable={false}

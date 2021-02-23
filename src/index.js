@@ -9,6 +9,7 @@ import AlertTemplate from "react-alert-template-basic";
 import reducers from './reducers';
 import reportWebVitals from './reportWebVitals';
 
+import 'rc-tooltip/assets/bootstrap.css'
 import './styles/font.css';
 import './styles/common.css';
 import './index.css';
